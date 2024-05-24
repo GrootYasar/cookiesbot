@@ -1,118 +1,154 @@
-import logging
-import sqlite3
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQueryHandler
+import time
+import json
+import telebot
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+##TOKEN DETAILS
+TOKEN = "TRON"
 
-# Initialize database
-conn = sqlite3.connect('bot.db')
-cursor = conn.cursor()
+BOT_TOKEN = "7178545425:AAHUUxXbKXqDwSt_BYcq31HAUJkvx2qeL6U"
+PAYMENT_CHANNEL = "@cookwithd"  # add payment channel here including the '@' sign
+OWNER_ID = 5577450357  # write owner's user id here.. get it from @MissRose_Bot by /id
+CHANNELS = ["@dailynetflixcookiesfree"]  # add channels to be checked here in the format - ["Channel 1", "Channel 2"]
+# you can add as many channels here and also add the '@' sign before channel username
+Daily_bonus = 1  # Put daily bonus amount here!
+Mini_Withdraw = 0.5  # remove 0 and add the minimum withdraw u want to set
+Per_Refer = 0.0001  # add per refer bonus here
 
-# Create tables
-cursor.execute('''CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, points INTEGER DEFAULT 0, referred_by INTEGER)''')
-cursor.execute('''CREATE TABLE IF NOT EXISTS referrals (user_id INTEGER, referred_id INTEGER, PRIMARY KEY (user_id, referred_id))''')
-conn.commit()
+bot = telebot.TeleBot(BOT_TOKEN)
 
-# Bot token and channel username
-BOT_TOKEN = '7178545425:AAHUUxXbKXqDwSt_BYcq31HAUJkvx2qeL6U'
-CHANNEL_USERNAME = '@dailynetflixcookiesfree'
-ADMIN_CHANNEL_ID = '5577450357'
+def check(id):
+    for i in CHANNELS:
+        check = bot.get_chat_member(i, id)
+        if check.status != 'left':
+            pass
+        else:
+            return False
+    return True
 
-# Start command handler
-def start(update: Update, context: CallbackContext) -> None:
-    user = update.effective_user
-    if not user:
+bonus = {}
+
+def menu(id):
+    keyboard = telebot.types.ReplyKeyboardMarkup(True)
+    keyboard.row('🆔 Account')
+    keyboard.row('🙌🏻 Referrals', '🎁 Bonus', '💸 Withdraw')
+    keyboard.row('⚙️ Set Wallet', '📊Statistics')
+    bot.send_message(id, "*🏡 Home*", parse_mode="Markdown",
+                     reply_markup=keyboard)
+
+@bot.message_handler(commands=['start'])
+def start(message):
+    try:
+        user = message.chat.id
+        msg = message.text
+        if msg == '/start':
+            user = str(user)
+            data = json.load(open('users.json', 'r'))
+            if user not in data['referred']:
+                data['referred'][user] = 0
+                data['total'] = data['total'] + 1
+            if user not in data['referby']:
+                data['referby'][user] = user
+            if user not in data['checkin']:
+                data['checkin'][user] = 0
+            if user not in data['DailyQuiz']:
+                data['DailyQuiz'][user] = "0"
+            if user not in data['balance']:
+                data['balance'][user] = 0
+            if user not in data['wallet']:
+                data['wallet'][user] = "none"
+            if user not in data['withd']:
+                data['withd'][user] = 0
+            if user not in data['id']:
+                data['id'][user] = data['total'] + 1
+            json.dump(data, open('users.json', 'w'))
+            print(data)
+            markup = telebot.types.InlineKeyboardMarkup()
+            markup.add(telebot.types.InlineKeyboardButton(
+                text='🤼‍♂️ Joined', callback_data='check'))
+            msg_start = "*🍔 To Use This Bot You Need To Join This Channel - "
+            for i in CHANNELS:
+                msg_start += f"\n➡️ {i}\n"
+            msg_start += "*"
+            bot.send_message(user, msg_start,
+                             parse_mode="Markdown", reply_markup=markup)
+        else:
+
+            data = json.load(open('users.json', 'r'))
+            user = message.chat.id
+            user = str(user)
+            refid = message.text.split()[1]
+            if user not in data['referred']:
+                data['referred'][user] = 0
+                data['total'] = data['total'] + 1
+            if user not in data['referby']:
+                data['referby'][user] = refid
+            if user not in data['checkin']:
+                data['checkin'][user] = 0
+            if user not in data['DailyQuiz']:
+                data['DailyQuiz'][user] = 0
+            if user not in data['balance']:
+                data['balance'][user] = 0
+            if user not in data['wallet']:
+                data['wallet'][user] = "none"
+            if user not in data['withd']:
+                data['withd'][user] = 0
+            if user not in data['id']:
+                data['id'][user] = data['total'] + 1
+            json.dump(data, open('users.json', 'w'))
+            print(data)
+            markups = telebot.types.InlineKeyboardMarkup()
+            markups.add(telebot.types.InlineKeyboardButton(
+                text='🤼‍♂️ Joined', callback_data='check'))
+            msg_start = "*🍔 To Use This Bot You Need To Join This Channel - \n➡️ @ Fill your channels at line: 101 and 157*"
+            bot.send_message(user, msg_start,
+                             parse_mode="Markdown", reply_markup=markups)
+    except:
+        bot.send_message(message.chat.id, "This command having error pls wait for fixing the glitch by admin")
+        bot.send_message(OWNER_ID, "Your bot got an error fix it fast!\n Error on command: "+message.text)
         return
-    cursor.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user.id,))
-    conn.commit()
-    keyboard = [[InlineKeyboardButton("Join Channel", url=f"https://t.me/{CHANNEL_USERNAME}")]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text(f"Welcome {user.first_name}! Please join our channel to use the bot.", reply_markup=reply_markup)
 
-# Home command handler
-def home(update: Update, context: CallbackContext) -> None:
-    keyboard = [
-        [InlineKeyboardButton("🆔 Account", callback_data='account')],
-        [InlineKeyboardButton("🙌 Referrals", callback_data='referrals'), InlineKeyboardButton("🍪 Withdraw", callback_data='withdraw')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text("Welcome to the bot. Use the commands below:", reply_markup=reply_markup)
+@bot.callback_query_handler(func=lambda call: True)
+def query_handler(call):
+    try:
+        ch = check(call.message.chat.id)
+        if call.data == 'check':
+            if ch == True:
+                data = json.load(open('users.json', 'r'))
+                user_id = call.message.chat.id
+                user = str(user_id)
+                bot.answer_callback_query(
+                    callback_query_id=call.id, text='✅ You joined Now yu can earn money')
+                bot.delete_message(call.message.chat.id, call.message.message_id)
+                if user not in data['refer']:
+                    data['refer'][user] = True
 
-def button(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    data = query.data
+                    if user not in data['referby']:
+                        data['referby'][user] = user
+                        json.dump(data, open('users.json', 'w'))
+                    if int(data['referby'][user]) != user_id:
+                        ref_id = data['referby'][user]
+                        ref = str(ref_id)
+                        if ref not in data['balance']:
+                            data['balance'][ref] = 0
+                        if ref not in data['referred']:
+                            data['referred'][ref] = 0
+                        json.dump(data, open('users.json', 'w'))
+                        data['balance'][ref] += Per_Refer
+                        data['referred'][ref] += 1
+                        bot.send_message(
+                            ref_id, f"*🏧 New Referral on Level 1, You Got : +{Per_Refer} {TOKEN}*", parse_mode="Markdown")
+                        json.dump(data, open('users.json', 'w'))
+                        return menu(call.message.chat.id)
 
-    if data == 'account':
-        show_account(query, context)
-    elif data == 'referrals':
-        show_referrals(query, context)
-    elif data == 'withdraw':
-        handle_withdraw(query, context)
+                    else:
+                        json.dump(data, open('users.json', 'w'))
+                        return menu(call.message.chat.id)
 
-def show_account(query, context):
-    user = query.from_user
-    cursor.execute("SELECT points FROM users WHERE user_id = ?", (user.id,))
-    points = cursor.fetchone()[0]
-    query.edit_message_text(text=f"Your account details:\n\nUsername: {user.username}\nPoints: {points}")
+                else:
+                    json.dump(data, open('users.json', 'w'))
+                    menu(call.message.chat.id)
 
-def show_referrals(query, context):
-    user = query.from_user
-    referral_link = f"https://t.me/yourbot?start={user.id}"
-    query.edit_message_text(text=f"Invite your friends with this link: {referral_link}")
-
-def handle_withdraw(query, context):
-    user = query.from_user
-    cursor.execute("SELECT points FROM users WHERE user_id = ?", (user.id,))
-    points = cursor.fetchone()[0]
-    if points < 3:
-        query.edit_message_text(text="You need at least 3 points to withdraw.")
-    else:
-        cursor.execute("UPDATE users SET points = points - 3 WHERE user_id = ?", (user.id,))
-        conn.commit()
-        context.bot.send_message(ADMIN_CHANNEL_ID, f"User {user.username} ({user.id}) has withdrawn Netflix Cookies.")
-        query.edit_message_text(text="Your cookies will be sent to you [6AM-10PM IST].")
-
-# Referral handling
-def handle_referral(update: Update, context: CallbackContext) -> None:
-    user = update.effective_user
-    args = context.args
-    if not user or not args:
-        return
-    referred_by = args[0]
-    cursor.execute("INSERT OR IGNORE INTO users (user_id, referred_by) VALUES (?, ?)", (user.id, referred_by))
-    cursor.execute("INSERT INTO referrals (user_id, referred_id) VALUES (?, ?)", (referred_by, user.id))
-    cursor.execute("UPDATE users SET points = points + 1 WHERE user_id = ?", (referred_by,))
-    conn.commit()
-
-# Check if user joined the channel
-def check_channel_membership(update: Update, context: CallbackContext) -> None:
-    user = update.effective_user
-    if not user:
-        return
-    member = context.bot.get_chat_member(CHANNEL_USERNAME, user.id)
-    if member.status not in ['member', 'administrator', 'creator']:
-        keyboard = [[InlineKeyboardButton("Join Channel", url=f"https://t.me/{CHANNEL_USERNAME}")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        update.message.reply_text("Please join the channel to use the bot.", reply_markup=reply_markup)
-        return
-    context.bot.send_message(user.id, "Thank you for joining the channel! You can now use the bot.")
-
-def main() -> None:
-    updater = Updater(BOT_TOKEN)
-
-    dispatcher = updater.dispatcher
-
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("home", home))
-    dispatcher.add_handler(CommandHandler("start", handle_referral, pass_args=True))
-    dispatcher.add_handler(CallbackQueryHandler(button))
-
-    updater.start_polling()
-    updater.idle()
-
-if __name__ == '__main__':
-    main()
+            else:
+                bot.answer_callback_query(
+                    callback_query_id=call.id, text='❌ You not Joined')
+                bot.delete_message(call
